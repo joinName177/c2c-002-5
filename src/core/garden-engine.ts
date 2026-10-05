@@ -1,5 +1,6 @@
-import type { Emotion, EmotionEntry, GardenSnapshot, GrowthStage, Plant } from './models';
+import type { Emotion, EmotionEntry, GardenSnapshot, GrowthStage, Plant, Tag } from './models';
 import { EMOTION_META, EMOTIONS } from './models';
+import { createTagId } from './ids';
 
 const day = 86400000;
 export function stageFor(streak: number): GrowthStage { if (streak >= 14) return '结果'; if (streak >= 7) return '开花'; if (streak >= 3) return '发芽'; return '种子'; }
@@ -23,7 +24,7 @@ export function syncPlants(entries: EmotionEntry[], previous: Plant[] = []): Pla
     return { id: existing?.id ?? `plant-${emotion}`, emotion, plantedAt: own[0].date, lastWatered: own[own.length - 1].date, streak, stage: stageFor(streak), status: streak ? '繁茂' : '枯萎', entryIds: own.map((item) => item.id) };
   });
 }
-export function createEntry(emotion: Emotion, note: string, intensity: number, date = new Date().toISOString().slice(0, 10)): EmotionEntry { return { id: `emotion-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, emotion, note: note.trim() || EMOTION_META[emotion].hint, intensity: Math.min(5, Math.max(1, Number(intensity) || 3)) }; }
+export function createEntry(emotion: Emotion, note: string, intensity: number, tagIds: string[] = [], date = new Date().toISOString().slice(0, 10)): EmotionEntry { return { id: `emotion-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, emotion, note: note.trim() || EMOTION_META[emotion].hint, intensity: Math.min(5, Math.max(1, Number(intensity) || 3)), tagIds: [...new Set(tagIds)] }; }
 export function annualReport(entries: EmotionEntry[]) {
   const counts = EMOTIONS.map((emotion) => ({ emotion, count: entries.filter((item) => item.emotion === emotion).length })).sort((a, b) => b.count - a.count);
   const active = new Set(entries.map((item) => item.date)).size;
@@ -32,7 +33,14 @@ export function annualReport(entries: EmotionEntry[]) {
 }
 export function sampleSnapshot(): GardenSnapshot {
   const today = new Date(); const entries: EmotionEntry[] = [];
-  const seed: Emotion[] = ['喜悦', '喜悦', '平静', '平静', '平静', '平静', '喜悦', '忧伤', '焦虑', '平静', '喜悦'];
-  seed.forEach((emotion, index) => { const date = new Date(today.getTime() - (seed.length - index - 1) * day).toISOString().slice(0, 10); entries.push(createEntry(emotion, index % 2 ? '今天注意到了自己的节奏。' : '给这一天留下一颗种子。', (index % 5) + 1, date)); });
-  return { entries, plants: syncPlants(entries) };
+  const tags: Tag[] = [{ id: createTagId(), name: '工作' }, { id: createTagId(), name: '生活' }];
+  const [work, life] = tags.map((tag) => tag.id);
+  const seed: { emotion: Emotion; tagIds: string[] }[] = [
+    { emotion: '喜悦', tagIds: [work] }, { emotion: '喜悦', tagIds: [life] }, { emotion: '平静', tagIds: [work] },
+    { emotion: '平静', tagIds: [life] }, { emotion: '平静', tagIds: [] }, { emotion: '平静', tagIds: [work, life] },
+    { emotion: '喜悦', tagIds: [life] }, { emotion: '忧伤', tagIds: [work] }, { emotion: '焦虑', tagIds: [work] },
+    { emotion: '平静', tagIds: [life] }, { emotion: '喜悦', tagIds: [] },
+  ];
+  seed.forEach((item, index) => { const date = new Date(today.getTime() - (seed.length - index - 1) * day).toISOString().slice(0, 10); entries.push(createEntry(item.emotion, index % 2 ? '今天注意到了自己的节奏。' : '给这一天留下一颗种子。', (index % 5) + 1, item.tagIds, date)); });
+  return { entries, plants: syncPlants(entries), tags };
 }
